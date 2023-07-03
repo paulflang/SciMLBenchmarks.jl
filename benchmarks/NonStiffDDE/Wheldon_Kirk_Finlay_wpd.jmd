@@ -3,25 +3,48 @@ title: Wheldon, Kirk, and Finlay Work-Precision Diagrams
 author: David Widmann, Chris Rackauckas
 ---
 
-# Wheldon, Kirk, and Finlay
+# Model
 
-We study algorithms for solving constant delay differential equations with a test problem from W.H. Enright and H. Hayashi, "The evaluation of numerical software for delay differential equations", 1997. It is a model of chronic granulocytic leukemia that was published by T. Wheldon, J. Kirk and H. Finlay in "Cyclical granulopoiesis in chronic granulocytic leukemia: A simulation study", 1974, and is given by
+We study a model of chronic granulocytic leukemia that was published by T. Wheldon, J. Kirk and H. Finlay in "Cyclical granulopoiesis in chronic granulocytic leukemia: A simulation study", 1974, and is given by
 ```math
-\begin{align}
-y_1'(t) &= \frac{1.1}{1 + \sqrt{10}y_1(t-20)^{5/4}} - \frac{10y_1(t)}{1 + 40y_2(t)} \\
-y_2'(t) &= \frac{100y_1(t)}{1 + 40y_2(t)} - 2.43y_2(t)
-\end{align}
+\begin{align*}
+  y_1'(t) &= \frac{1.1}{1 + \sqrt{10}y_1(t-20)^{5/4}} - \frac{10y_1(t)}{1 + 40y_2(t)} \\
+  y_2'(t) &= \frac{100y_1(t)}{1 + 40y_2(t)} - 2.43y_2(t)
+\end{align*}
 ```
+for ``t \in [0, 100]`` with history function
+```math
+\begin{align*}
+  \phi_1(t) &= 1.05767027/3, \\
+  \phi_2(t) &= 1.030713491/3,
+\end{align*}
+```
+for ``t \leq 0``. It is test problem A2 of W. H. Enright and H. Hayashi, "The evaluation of numerical software for delay differential equations", 1997.
+
+# Setup
 
 ```julia
-using DelayDiffEq, DiffEqDevTools, DiffEqProblemLibrary, Plots
-using DiffEqProblemLibrary.DDEProblemLibrary: importddeproblems; importddeproblems()
-import DiffEqProblemLibrary.DDEProblemLibrary: prob_dde_wheldon
-gr()
+using DelayDiffEq, DiffEqDevTools, DiffEqProblemLibrary.DDEProblemLibrary
+DDEProblemLibrary.importddeproblems()
 
-sol = solve(prob_dde_wheldon, MethodOfSteps(Vern9(), max_fixedpoint_iters=1000); reltol=1e-14, abstol=1e-14)
-test_sol = TestSolution(sol)
+const prob = DDEProblemLibrary.prob_dde_DDETST_A2
+const sol = solve(prob, MethodOfSteps(Vern9(); max_fixedpoint_iters = 1000);
+                  reltol = 1e-14, abstol = 1e-14)
+const test_sol = TestSolution(sol)
+
+using Plots
+gr()
 plot(sol)
+```
+
+```julia; results = "hidden"
+function buildWorkPrecisionSet(algs, abstols, reltols; kwargs...)
+    setups = [Dict(:alg => MethodOfSteps(alg)) for alg in algs]
+    names = nameof.(typeof.(algs))
+
+    WorkPrecisionSet(prob, abstols, reltols, setups;
+                      names = names, appxsol = test_sol, maxiters = Int(1e5), kwargs...)
+end
 ```
 
 ## Low order RK methods
@@ -31,38 +54,22 @@ plot(sol)
 First we compare final errors of solutions with low order RK methods at high tolerances.
 
 ```julia
-abstols = 1.0 ./ 10.0 .^ (4:7)
-reltols = 1.0 ./ 10.0 .^ (1:4)
+abstols = @. 1.0 / 10.0^(4:7)
+reltols = @. 1.0 / 10.0^(1:4)
+algs = [BS3(), Tsit5(), RK4(), DP5(), OwrenZen3(), OwrenZen4(), OwrenZen5()]
 
-setups = [Dict(:alg=>MethodOfSteps(BS3())),
-          Dict(:alg=>MethodOfSteps(Tsit5())),
-          Dict(:alg=>MethodOfSteps(RK4())),
-          Dict(:alg=>MethodOfSteps(DP5())),
-          Dict(:alg=>MethodOfSteps(OwrenZen3())),
-          Dict(:alg=>MethodOfSteps(OwrenZen4())),
-          Dict(:alg=>MethodOfSteps(OwrenZen5()))]
-names = ["BS3", "Tsit5", "RK4", "DP5", "OwrenZen3", "OwrenZen4", "OwrenZen5"]
-wp = WorkPrecisionSet(prob_dde_wheldon,abstols,reltols,setups;names=names,
-                      appxsol=test_sol,maxiters=Int(1e5),error_estimate=:final)
+wp = buildWorkPrecisionSet(algs, abstols, reltols; error_estimate = :final)
 plot(wp)
 ```
 
 Next we test interpolation errors:
 
 ```julia
-abstols = 1.0 ./ 10.0 .^ (4:7)
-reltols = 1.0 ./ 10.0 .^ (1:4)
+abstols = @. 1.0 / 10.0^(4:7)
+reltols = @. 1.0 / 10.0^(1:4)
+algs = [BS3(), Tsit5(), RK4(), DP5(), OwrenZen3(), OwrenZen4(), OwrenZen5()]
 
-setups = [Dict(:alg=>MethodOfSteps(BS3())),
-          Dict(:alg=>MethodOfSteps(Tsit5())),
-          Dict(:alg=>MethodOfSteps(RK4())),
-          Dict(:alg=>MethodOfSteps(DP5())),
-          Dict(:alg=>MethodOfSteps(OwrenZen3())),
-          Dict(:alg=>MethodOfSteps(OwrenZen4())),
-          Dict(:alg=>MethodOfSteps(OwrenZen5()))]
-names = ["BS3", "Tsit5", "RK4", "DP5", "OwrenZen3", "OwrenZen4", "OwrenZen5"]
-wp = WorkPrecisionSet(prob_dde_wheldon,abstols,reltols,setups;names=names,
-                      appxsol=test_sol,maxiters=Int(1e5),error_estimate=:L2)
+wp = buildWorkPrecisionSet(algs, abstols, reltols; error_estimate = :L2)
 plot(wp)
 ```
 
@@ -73,36 +80,20 @@ Both interpolation tests and tests of final error show similar results. `BS3` do
 We repeat our tests at low tolerances.
 
 ```julia
-abstols = 1.0 ./ 10.0 .^ (8:11)
-reltols = 1.0 ./ 10.0 .^ (5:8)
+abstols = @. 1.0 / 10.0^(8:11)
+reltols = @. 1.0 / 10.0^(5:8)
+algs = [BS3(), Tsit5(), RK4(), DP5(), OwrenZen3(), OwrenZen4(), OwrenZen5()]
 
-setups = [Dict(:alg=>MethodOfSteps(BS3())),
-          Dict(:alg=>MethodOfSteps(Tsit5())),
-          Dict(:alg=>MethodOfSteps(RK4())),
-          Dict(:alg=>MethodOfSteps(DP5())),
-          Dict(:alg=>MethodOfSteps(OwrenZen3())),
-          Dict(:alg=>MethodOfSteps(OwrenZen4())),
-          Dict(:alg=>MethodOfSteps(OwrenZen5()))]
-names = ["BS3", "Tsit5", "RK4", "DP5", "OwrenZen3", "OwrenZen4", "OwrenZen5"]
-wp = WorkPrecisionSet(prob_dde_wheldon,abstols,reltols,setups;names=names,
-                      appxsol=test_sol,maxiters=Int(1e5),error_estimate=:final)
+wp = buildWorkPrecisionSet(algs, abstols, reltols; error_estimate = :final)
 plot(wp)
 ```
 
 ```julia
-abstols = 1.0 ./ 10.0 .^ (8:11)
-reltols = 1.0 ./ 10.0 .^ (5:8)
+abstols = @. 1.0 / 10.0^(8:11)
+reltols = @. 1.0 / 10.0^(5:8)
+algs = [BS3(), Tsit5(), RK4(), DP5(), OwrenZen3(), OwrenZen4(), OwrenZen5()]
 
-setups = [Dict(:alg=>MethodOfSteps(BS3())),
-          Dict(:alg=>MethodOfSteps(Tsit5())),
-          Dict(:alg=>MethodOfSteps(RK4())),
-          Dict(:alg=>MethodOfSteps(DP5())),
-          Dict(:alg=>MethodOfSteps(OwrenZen3())),
-          Dict(:alg=>MethodOfSteps(OwrenZen4())),
-          Dict(:alg=>MethodOfSteps(OwrenZen5()))]
-names = ["BS3", "Tsit5", "RK4", "DP5", "OwrenZen3", "OwrenZen4", "OwrenZen5"]
-wp = WorkPrecisionSet(prob_dde_wheldon,abstols,reltols,setups;names=names,
-                      appxsol=test_sol,maxiters=Int(1e5),error_estimate=:L2)
+wp = buildWorkPrecisionSet(algs, abstols, reltols; error_estimate = :L2)
 plot(wp)
 ```
 
@@ -115,32 +106,20 @@ Out of the compared methods, `Tsit5`, `DP5`, and `OwrenZen5` seem to be the best
 We compare the Verner methods, which use lazy interpolants, at high tolerances. As reference we include `OwrenZen4`.
 
 ```julia
-abstols = 1.0 ./ 10.0 .^ (4:7)
-reltols = 1.0 ./ 10.0 .^ (1:4)
+abstols = @. 1.0 / 10.0^(4:7)
+reltols = @. 1.0 / 10.0^(1:4)
+algs = [Vern6(), Vern7(), Vern8(), Vern9(), OwrenZen4()]
 
-setups = [Dict(:alg=>MethodOfSteps(Vern6())),
-          Dict(:alg=>MethodOfSteps(Vern7())),
-          Dict(:alg=>MethodOfSteps(Vern8())),
-          Dict(:alg=>MethodOfSteps(Vern9())),
-          Dict(:alg=>MethodOfSteps(OwrenZen4()))]
-names = ["Vern6", "Vern7", "Vern8", "Vern9", "OwrenZen4"]
-wp = WorkPrecisionSet(prob_dde_wheldon,abstols,reltols,setups;names=names,
-                      appxsol=test_sol,maxiters=Int(1e5),error_estimate=:final)
+wp = buildWorkPrecisionSet(algs, abstols, reltols; error_estimate = :final)
 plot(wp)
 ```
 
 ```julia
-abstols = 1.0 ./ 10.0 .^ (4:7)
-reltols = 1.0 ./ 10.0 .^ (1:4)
+abstols = @. 1.0 / 10.0^(4:7)
+reltols = @. 1.0 / 10.0^(1:4)
+algs = [Vern6(), Vern7(), Vern8(), Vern9(), OwrenZen4()]
 
-setups = [Dict(:alg=>MethodOfSteps(Vern6())),
-          Dict(:alg=>MethodOfSteps(Vern7())),
-          Dict(:alg=>MethodOfSteps(Vern8())),
-          Dict(:alg=>MethodOfSteps(Vern9())),
-          Dict(:alg=>MethodOfSteps(OwrenZen4()))]
-names = ["Vern6", "Vern7", "Vern8", "Vern9", "OwrenZen4"]
-wp = WorkPrecisionSet(prob_dde_wheldon,abstols,reltols,setups;names=names,
-                      appxsol=test_sol,maxiters=Int(1e5),error_estimate=:L2)
+wp = buildWorkPrecisionSet(algs, abstols, reltols; error_estimate = :L2)
 plot(wp)
 ```
 
@@ -149,38 +128,26 @@ plot(wp)
 We repeat these tests and compare the Verner methods also at low tolerances.
 
 ```julia
-abstols = 1.0 ./ 10.0 .^ (8:11)
-reltols = 1.0 ./ 10.0 .^ (5:8)
+abstols = @. 1.0 / 10.0^(8:11)
+reltols = @. 1.0 / 10.0^(5:8)
+algs = [Vern6(), Vern7(), Vern8(), Vern9(), OwrenZen4()]
 
-setups = [Dict(:alg=>MethodOfSteps(Vern6())),
-          Dict(:alg=>MethodOfSteps(Vern7())),
-          Dict(:alg=>MethodOfSteps(Vern8())),
-          Dict(:alg=>MethodOfSteps(Vern9())),
-          Dict(:alg=>MethodOfSteps(OwrenZen4()))]
-names = ["Vern6", "Vern7", "Vern8", "Vern9", "OwrenZen4"]
-wp = WorkPrecisionSet(prob_dde_wheldon,abstols,reltols,setups;names=names,
-                      appxsol=test_sol,maxiters=Int(1e5),error_estimate=:final)
+wp = buildWorkPrecisionSet(algs, abstols, reltols; error_estimate = :final)
 plot(wp)
 ```
 
 ```julia
-abstols = 1.0 ./ 10.0 .^ (8:11)
-reltols = 1.0 ./ 10.0 .^ (5:8)
+abstols = @. 1.0 / 10.0^(8:11)
+reltols = @. 1.0 / 10.0^(5:8)
+algs = [Vern6(), Vern7(), Vern8(), Vern9(), OwrenZen4()]
 
-setups = [Dict(:alg=>MethodOfSteps(Vern6())),
-          Dict(:alg=>MethodOfSteps(Vern7())),
-          Dict(:alg=>MethodOfSteps(Vern8())),
-          Dict(:alg=>MethodOfSteps(Vern9())),
-          Dict(:alg=>MethodOfSteps(OwrenZen4()))]
-names = ["Vern6", "Vern7", "Vern8", "Vern9", "OwrenZen4"]
-wp = WorkPrecisionSet(prob_dde_wheldon,abstols,reltols,setups;names=names,
-                      appxsol=test_sol,maxiters=Int(1e5),error_estimate=:L2)
+wp = buildWorkPrecisionSet(algs, abstols, reltols; error_estimate = :L2)
 plot(wp)
 ```
 
 It seems `Vern6` and `Vern7` are both well suited for the problem at low tolerances and outperform `OwrenZen4`, whereas at high tolerances `OwrenZen4` is more efficient.
 
-```julia{echo=false}
+```julia; echo = false
 using DiffEqBenchmarks
-DiffEqBenchmarks.bench_footer(WEAVE_ARGS[:folder],WEAVE_ARGS[:file])
+DiffEqBenchmarks.bench_footer(WEAVE_ARGS[:folder], WEAVE_ARGS[:file])
 ```

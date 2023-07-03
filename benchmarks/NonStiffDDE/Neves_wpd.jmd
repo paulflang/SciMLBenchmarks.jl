@@ -1,41 +1,56 @@
 ---
-title: Mackey and Glass Work-Precision Diagrams
+title: Neves Work-Precision Diagrams
 author: David Widmann, Chris Rackauckas
 ---
 
 # Model
 
-We study a model of blood production that was published by M. C. Mackey and L. Glass in "Oscillation and chaos in physiological control systems", 1977, and is given by
+We study a state-dependent delay differential equation that was published by K. W. Neves, "Automatic integration of functional differential equations: An approach", 1975, and is given by
+
 ```math
-\begin{equation}
- y'(t) = \frac{0.2y(t-14)}{1 + y(t-14)^{10}} - 0.1y(t)
-\end{equation}
+\begin{align*}
+  y_1'(t) &= y_2(t), \\
+  y_2'(t) &= - y_2(\exp(1 - y_2(t))) y_2(t)^2 \exp(1 - y_2(t)),
+\end{align*}
 ```
-for ``t \in [0, 500]`` with history function ``\phi(t) = 0.5`` for ``t \leq 0``. It is test problem A1 of W. H. Enright and H. Hayashi, "The evaluation of numerical software for delay differential equations", 1997.
+
+for ``t \in [0.1, 5]`` with history function
+
+```math
+\begin{align*}
+  \phi_1(t) &= \log t,\\
+  \phi_2(t) &= 1 / t,
+\end{align*}
+```
+
+for ``t \in (0, 0.1]``. The analytical solution for ``t \in [0.1, 5]`` is
+
+```math
+\begin{align*}
+  y_1(t) &= \log t, \\
+  y_2(t) &= 1 / t.
+\end{align*}
+```
+
+The problem is test problem D1 of W. H. Enright and H. Hayashi, "The evaluation of numerical software for delay differential equations", 1997.
 
 # Setup
 
-```julia
+```julia; results = "hidden"
 using DelayDiffEq, DiffEqDevTools, DiffEqProblemLibrary.DDEProblemLibrary
+using Random
+Random.seed!(123)
+
 DDEProblemLibrary.importddeproblems()
 
-const prob = DDEProblemLibrary.prob_dde_DDETST_A1
-const sol = solve(prob, MethodOfSteps(Vern9(); max_fixedpoint_iters = 1000);
-                  reltol = 1e-14, abstol = 1e-14)
-const test_sol = TestSolution(sol)
+const prob = prob_dde_DDETST_D1
 
-using Plots
-gr()
-plot(sol)
-```
-
-```julia; results = "hidden"
 function buildWorkPrecisionSet(algs, abstols, reltols; kwargs...)
     setups = [Dict(:alg => MethodOfSteps(alg)) for alg in algs]
     names = nameof.(typeof.(algs))
 
     WorkPrecisionSet(prob, abstols, reltols, setups;
-                     names = names, appxsol = test_sol, maxiters = Int(1e5), kwargs...)
+                     names = names, maxiters = Int(1e5), kwargs...)
 end
 ```
 
@@ -43,7 +58,7 @@ end
 
 ### High tolerances
 
-First we test final error estimates of continuous RK methods of low order at high tolerances. `OwrenZen4`, `OwrenZen5`, and `RK4` yield the best error estimates.
+First we compare final errors of solutions with low order RK methods at high tolerances.
 
 ```julia
 abstols = @. 1.0 / 10.0^(4:7)
@@ -54,7 +69,7 @@ wp = buildWorkPrecisionSet(algs, abstols, reltols; error_estimate = :final)
 plot(wp)
 ```
 
-Next we test average interpolation errors:
+Next we test interpolation errors:
 
 ```julia
 abstols = @. 1.0 / 10.0^(4:7)
@@ -65,11 +80,11 @@ wp = buildWorkPrecisionSet(algs, abstols, reltols; error_estimate = :L2)
 plot(wp)
 ```
 
-As before, `OwrenZen4` and `OwrenZen5` perform well over the whole range of investigated tolerances.
+Both interpolation tests and tests of final error show similar results. `BS3` does quite well but only `OwrenZen4`, `OwrenZen5`, and `RK4` achieve interpolation errors of about 1e-5.
 
 ### Low tolerances
 
-We repeat our tests with low tolerances.
+We repeat our tests at low tolerances.
 
 ```julia
 abstols = @. 1.0 / 10.0^(8:11)
@@ -80,8 +95,6 @@ wp = buildWorkPrecisionSet(algs, abstols, reltols; error_estimate = :final)
 plot(wp)
 ```
 
-And once again we also test the interpolation errors:
-
 ```julia
 abstols = @. 1.0 / 10.0^(8:11)
 reltols = @. 1.0 / 10.0^(5:8)
@@ -91,13 +104,13 @@ wp = buildWorkPrecisionSet(algs, abstols, reltols; error_estimate = :L2)
 plot(wp)
 ```
 
-Apparently `Tsit5` and `DP5` perform quite well at low tolerances, but only `OwrenZen5`, `OwrenZen4` and `RK4` achieve interpolation errors of around 1e-9.
+Out of the compared methods, `Tsit5`, `DP5`, and `OwrenZen5` seem to be the best methods for this problem at low tolerances, but also `OwrenZen4` performs similarly well. `OwrenZen5` and `OwrenZen4` can even achieve interpolation errors below 1e-9.
 
 ## Lazy interpolants
 
 ### High tolerances
 
-We repeat our tests with the Verner methods which, in contrast to the methods above, use lazy interpolants. As reference we include `OwrenZen4`.
+We compare the Verner methods, which use lazy interpolants, at high tolerances. As reference we include `OwrenZen4`.
 
 ```julia
 abstols = @. 1.0 / 10.0^(4:7)
@@ -108,8 +121,6 @@ wp = buildWorkPrecisionSet(algs, abstols, reltols; error_estimate = :final)
 plot(wp)
 ```
 
-And we obtain the following interpolation errors:
-
 ```julia
 abstols = @. 1.0 / 10.0^(4:7)
 reltols = @. 1.0 / 10.0^(1:4)
@@ -118,12 +129,10 @@ algs = [Vern6(), Vern7(), Vern8(), Vern9(), OwrenZen4()]
 wp = buildWorkPrecisionSet(algs, abstols, reltols; error_estimate = :L2)
 plot(wp)
 ```
-
-`Vern6`, `Vern7`, and `Vern9` are outperformed by `OwrenZen4`.
 
 ### Low tolerances
 
-Again, we repeat our tests at low tolerances.
+We repeat these tests and compare the Verner methods also at low tolerances.
 
 ```julia
 abstols = @. 1.0 / 10.0^(8:11)
@@ -143,7 +152,7 @@ wp = buildWorkPrecisionSet(algs, abstols, reltols; error_estimate = :L2)
 plot(wp)
 ```
 
-`Vern6`, `Vern7`, and `Vern9` show similar results at low tolerances, and perform even better than `OwrenZen4`.
+It seems `Vern6` and `Vern7` are both well suited for the problem at low tolerances and outperform `OwrenZen4`, whereas at high tolerances `OwrenZen4` is more efficient.
 
 ```julia; echo = false
 using DiffEqBenchmarks
