@@ -24,6 +24,7 @@ Initial idea for benchmarking this model comes from a [Discourse discussion](htt
 
 ### Presynaptic parameters
 
+
 ```julia
 # adapted from  SynapseElife/src/ParamsSynapse.jl
 @with_kw struct PreSynapseParams

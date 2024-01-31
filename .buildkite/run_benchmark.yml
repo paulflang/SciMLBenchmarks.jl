@@ -44,13 +44,8 @@ steps:
           s3_prefix: s3://julialang-buildkite-artifacts/scimlbenchmarks
     timeout_in_minutes: 4000
     commands: |
-      JULIAHUBREGISTRY_BENCHMARK_TARGETS=()
-      if [[ "${JULIAHUBREGISTRY_BENCHMARK_TARGETS[*]}" =~ "{PATH}"" ]]; then
-        export JULIA_PKG_SERVER="juliahub.com"
-        mkdir -p "$${JULIA_DEPOT_PATH}/servers/${JULIA_PKG_SERVER}"
-        cp .buildkite/secrets/token.toml "$${JULIA_DEPOT_PATH}/servers/${JULIA_PKG_SERVER}/auth.toml"
-        julia -e 'using Pkg; Pkg.Registry.add()'
-      fi
+      JULIAHUBREGISTRY_BENCHMARK_TARGETS=("benchmarks/HybridJumps/Synapse.jmd" "benchmarks/HybridJumps/Synapse2.jmd")
+      echo "${JULIAHUBREGISTRY_BENCHMARK_TARGETS}" 
 
       # Clear out these secrets as they're not needed during the actual build
       BUILDKITE_S3_ACCESS_KEY_ID="" BUILDKITE_S3_SECRET_ACCESS_KEY="" ./.buildkite/build_benchmark.sh "{PATH}"
